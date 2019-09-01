@@ -4,7 +4,9 @@ import Data.List.Split (splitOn)
 data Color  = White | Black deriving Eq
 data Type   = Pawn | Knight | Bishop | Rook | Queen | King deriving Eq
 data Square = Piece Color Type | None deriving Eq
+
 type Board  = [[Square]]
+type State  = (Board, PFlags, KFlags)
 
 {--- BOARD DISPLAY ---}
 
@@ -90,10 +92,17 @@ start_board =
   [(take 8) . repeat $ Piece Black Pawn,
    [Piece Black Rook, Piece Black Knight, Piece Black Bishop, Piece Black Queen,
     Piece Black King, Piece Black Bishop, Piece Black Knight, Piece Black Rook]]
+start_kflags :: KFlags
+start_kflags = ((False, False, False), (False, False, False))
+start_pflags :: PFlags
+start_pflags = (take 8 $ repeat False, take 8 $ repeat False)
+start :: State
+start = (start_board, start_pflags, start_kflags)
 
+-- provide a string representation of a State
 -- replace every '*' in the template with a square from the board
-print_board :: Board -> String
-print_board board = (++) (head lines)
+toStr :: State -> String
+toStr (board, _, _) = (++) (head lines)
   $ foldl (\acc (x,y) -> acc ++ x ++ y) [] $ zip board' (tail lines)
   where flatten = foldl (++) []
         board'  = map show $ flatten $ reverse board
@@ -139,20 +148,34 @@ set_sq square coords board =
     (if rank' /= rank
      then (map snd row)
      else foldr (\(file', sq) row' ->
-       (if file' /= file then sq else square) : row') [] row) : acc) [] board'
+       (if file' /= file
+        then sq
+        else square)
+       : row') [] row) : acc) [] board'
   where
     -- annotate board with coordinate information
     board' = zip "12345678" $ map (zip "abcdefgh") board
     rank = last coords
     file = head coords
 
--- process a move of the form: (move "e2" "e4" start_board)
--- TODO: potentially set PFlags and KFlags here, although it makes
---       the return signature rather messy
---       why does chess need such complicated rules?
-move :: String -> String -> Board -> Board
-move from to board =
-  set_sq (get_sq board from) to $ (set_sq None from) board
+-- process a move of the form: (move "e2" "e4" start)
+move :: String -> String -> State -> State
+move from to (board, pf, kf) =
+  (board', pf', kf')
+  where
+    coords = (rank from, file from)
+    -- update the board by moving the piece to the next square
+    board' = set_sq (get_sq board from) to $ (set_sq None from) board
+    -- mark if any pawn made a double move this turn
+    let piece_to_move = get_sq board from
+    in  pf' = if piece_to_move == Piece White Pawn
+              then setPF pf "a" (+2)
+              else
+    -- mark if any kings or rooks have moved so far
+    combine = ((map and) .) . zip
+    let piece_to_move = get_sq board from
+    in  kf' = combine kf $
+                case piece_to_move of Piece White King -> ((True
 
 -- return a list of the coords to which the piece on the given coords can move
 -- due to en passant captures, 'pawn previously doubled' flags are passed
@@ -250,4 +273,4 @@ main = do
   hFlush stdout
   game_str <- getLine
   -- some processing here
-  putStrLn $ print_board start_board
+  putStrLn $ toStr start
